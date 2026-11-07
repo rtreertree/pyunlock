@@ -2,13 +2,14 @@
 
 `DESIGN.md` is the source of truth and was read in full before implementation.
 No applicable `AGENTS.md` was present. The initial workspace contained only the
-design, with no Git metadata or configured remote. The design is unchanged.
+design, with no Git metadata or configured remote. The original design is
+preserved apart from the explicit automatic-PATH amendment requested later.
 The user subsequently pushed the project to `rtreertree/pyunlock`; `origin` now
 identifies that repository and its default branch is `main`.
 
 | Design requirement | Implementation | Verification |
 | --- | --- | --- |
-| Local processing, Python 3.11+, tested crypto dependency | `pyproject.toml`, `src/pyunlock/` | Pass on Python 3.12.3, pypdf 7.0.0, cryptography 50.0.2. Application has no network/upload code. Python 3.11 execution remains unverified. |
+| Local processing, Python 3.11+, tested crypto dependency | `pyproject.toml`, `src/pyunlock/` | Pass locally on Python 3.12.3, pypdf 7.0.0, cryptography 50.0.2. Application has no network/upload code. The prior committed version also passed hosted Python 3.11/3.12/3.13 checks. |
 | Original syntax, unlock/replace defaults, action/mode selection, repeated multi-path `-f`, recursion | `cli.py` | Pass: CLI syntax/defaults/actions/modes/repeated-files/recursion tests. |
 | Console/module entry points, help/version, integer `main()` return | packaging, `__main__.py`, `cli.py` | Pass: installed entry points outside checkout, help/version and rich-content round trips. |
 | Lazy shared unlock prompt, distinguish omitted/empty password, unencrypted skip without prompt | password provider | Pass: explicit/interactive empty password, shared lazy prompt, noninteractive skips, real terminal module test. |
@@ -33,26 +34,29 @@ identifies that repository and its default branch is `main`.
 | RC4/AES variants; user/owner, correct/wrong/empty/Unicode passwords and paths | PDF modules | Pass: RC4-40/128, AES-128/256-R5/256 generated fixtures, whitespace/Unicode and user/owner passwords. |
 | Invalid/unreadable input, unwritable destinations, write/validation/publication failures preserve originals | file I/O | Pass: corrupt inputs, real permission failures, partial writes, validation faults, actual os.replace failure and publication faults for both actions/modes. |
 | Plain one-line results, stdout success/skip, stderr failure, summary, codes 0/1/2/130 | `cli.py`, structured results | Pass: discovery failures counted, partial interrupted summary, controls/Unicode separators escaped, installed exit status checks. |
-| Fixed managed root/envs/command layout and ownership marker; no sudo/startup edits | scripts and README | Pass: isolated HOME with spaces/Unicode, root/marker permissions/layout, external PDFs and startup configuration retained. |
+| Fixed managed root/envs/command layout and ownership marker; no sudo; automatic PATH per user amendment | scripts, `shell_setup.py`, README | Pass: isolated HOME with spaces/Unicode, root/marker layout, external PDFs preserved. Shell edits are explicitly authorized, announced and restricted to one guarded PATH block. |
+| Current and future Bash/Zsh terminals require no manual PATH configuration | sourceable installer, packaged shell helper | Pass: real Bash/Zsh source/eval and interactive/login tests, unchanged caller options/traps/cwd, exact PATH-component matching, repeated installs, Bash login precedence and exported/unexported ZDOTDIR. Standalone child processes configure future terminals; current-terminal activation uses source/eval. |
+| Preserve shell settings; refuse unsafe files; recover append failures without discarding concurrent changes | `shell_setup.py` | Pass: original bytes/inode permissions retained, newline handling, prevalidation of all targets, symlink/hardlink/FIFO/readonly refusal, partial/edited marker refusal, write/fsync/interrupt rollback and concurrent-edit preservation. |
 | Fresh permanent env, checks before atomic command switch, retained old envs, failed upgrade keeps working installation | `install.sh` | Pass: real wheel install/update, retained environment, invalid wheel/Git ref/transport, venv/pip/check/version failures, publication collision and interruption. |
 | Prerequisites, invalid repo/ref, transport failure, unrelated command/ownership safety | installation scripts | Pass: missing Python/Git/venv/pip, bad repo/ref, locally redirected real Git failures, unrelated file/link/dangling command, symlink parents/root/envs, unsafe markers. Curl is a prerequisite of the documented download commands. |
 | Manual installation same layout, repeat refusal, checkout independence | exact README manual block | Pass: real venv/pip in isolated HOME, copied checkout deleted, installed console/module still work. |
 | Uninstall normal/retained/incomplete/dangling/repeated; validate both targets before deleting; preserve external files | `uninstall.sh` | Pass: installer suite, multiple real envs, incomplete roots, dangling link, repeat removal, unrelated commands/unmarked or symlinked roots refused. |
 | Discover real GitHub remote or preserve explicit placeholder | installer + README + project URLs | Pass: configured origin is rtreertree/pyunlock. Installer defaults, README download/clone URLs and package metadata use the actual repository. Default Git installation tested against GitHub main in an isolated HOME. Design reference templates and the explicit-placeholder rejection test remain unchanged. |
-| README prerequisites/examples/exact paths/automated/manual install/update/uninstall and limitations | `README.md` | Reviewed against implementation; exact manual block tested. Original DESIGN.md preserved. |
+| README prerequisites/examples/exact paths/automated/manual install/update/uninstall and limitations | `README.md` | Reviewed against implementation; exact manual block tested, including immediate activation. DESIGN.md now records the user's automatic-PATH amendment. |
 | Shell syntax, sdist/wheel build, noneditable installed application | build and entire test suite | Pass on macOS: isolated build creates sdist, then wheel from sdist; fresh install, pip check, installed package tested without src path overrides. |
-| macOS and Linux validation before publication | platform checks + `.github/workflows/tests.yml` | macOS arm64 verified. Linux/WSL and Python 3.11 remain unverified locally. New workflow covers macOS/Ubuntu and Python 3.11/3.12/3.13, including real installer tests; check hosted results for the pushed commit before claiming additional platform coverage. |
+| macOS and Linux validation before publication | platform checks + `.github/workflows/tests.yml` | Current changes verified locally on macOS arm64. Baseline commit 46c6b43 passed all six macOS/Ubuntu Python 3.11/3.12/3.13 jobs; check hosted results for the automatic-PATH commit separately. WSL itself remains untested. |
 
 ## Recorded verification
 
 Verified on 2026-11-07 (Asia/Bangkok), macOS arm64, Python 3.12.3,
 pypdf 7.0.0, cryptography 50.0.2 and pytest 9.2.0. The full suite passes
-**220 tests with no skips**, including real installer integration and four
-installed-command pseudo-terminal cases. Bash syntax and `pip check` pass.
+**268 tests with no skips**, including real installer integration, shell PATH
+setup/activation tests and four installed-command pseudo-terminal cases.
+Bash/Zsh installer syntax and `pip check` pass.
 
 Build/test environments and downloaded wheels were confined to `/private/tmp`;
 PDFs and fake homes were generated in temporary directories. The fresh packaged
-test interpreter was `/private/tmp/pyunlock-followup-env/bin/python`, importing
+test interpreter was `/private/tmp/pyunlock-path-env/bin/python`, importing
 pyunlock from its `site-packages`, without editable installation or `PYTHONPATH`.
 Real installer tests used the built wheel and an offline dependency wheelhouse.
 Git failure tests redirected requests to local generated repositories; no
@@ -63,13 +67,14 @@ The full run used:
 ```bash
 PYUNLOCK_TEST_WHEEL="$PWD/dist/pyunlock-0.1.0-py3-none-any.whl" \
 PYUNLOCK_TEST_WHEELHOUSE=/private/tmp/pyunlock-wheelhouse \
-/private/tmp/pyunlock-followup-env/bin/python -m pytest -q
+/private/tmp/pyunlock-path-env/bin/python -m pytest -q
 ```
 
-Linux/WSL and Python 3.11 execution remain external checks before publication.
-The new six-job GitHub Actions workflow has been checked for valid YAML and
-embedded shell syntax. Hosted results for each pushed commit must be checked
-in GitHub Actions before claiming coverage beyond the local macOS run.
+The previous committed version passed all six hosted jobs on macOS/Ubuntu and
+Python 3.11/3.12/3.13: [baseline CI run](https://github.com/rtreertree/pyunlock/actions/runs/42374474279).
+Hosted results for the automatic-PATH commit must be checked independently before
+claiming that version's coverage beyond the local macOS run. WSL remains an
+external platform check. The workflow's embedded shell syntax has been checked.
 Representative synthetic fixture success does not establish preservation of
 every possible PDF feature. Digital signatures, extended attributes, ACLs,
 original timestamps, secure erasure, concurrent-editor locking and forced-kill
@@ -77,8 +82,26 @@ cleanup retain the design's stated limits. Filesystems without atomic hard-link
 publication fail safely in new mode.
 
 No personal documents were used and no installation was made into the real
-home. No release was published, shell startup files edited or administrator
-operations performed.
+home. Only temporary test-home startup files were edited; real startup files
+were untouched. No release was published or administrator operations performed.
+
+## Automatic PATH amendment
+
+The user explicitly requested automatic PATH setup, superseding the original
+manual-export/no-startup-edits design. The installer now invokes the packaged
+`pyunlock.shell_setup` helper before switching the command, announces updates,
+and appends a uniquely marked conditional block to the selected shell's files.
+Repeated setup adds neither duplicate blocks nor duplicate PATH components.
+Existing settings and permissions remain intact. Failed writes roll back only
+the helper's own appends, never another editor's changes. Startup-file refusal
+or configuration failure preserves the working installation.
+
+The recommended source/eval invocation also changes PATH in the caller after
+successful installation. It preserves caller options, traps, cwd and unexported
+ZDOTDIR. Direct script execution cannot mutate its parent's environment and
+therefore activates the command in future terminals. Manual installation calls
+the same helper and activates PATH in its outer shell block. Removal deliberately
+retains the guarded shared local-bin PATH entry for other applications.
 
 ## GitHub continuation
 
@@ -100,15 +123,16 @@ Continuation changes: `install.sh`, `README.md`, `REQUIREMENTS.md`,
 
 ## Changed files
 
-The original implementation added the files below; `DESIGN.md` was left unchanged.
+The original implementation added the files below. A later user amendment updates
+DESIGN.md's PATH requirements and adds the shell helper and its tests.
 
 - Packaging: `pyproject.toml`, `MANIFEST.in`, `.gitignore`.
 - Application: `src/pyunlock/__init__.py`, `__main__.py`, `cli.py`,
-  `discovery.py`, `models.py`, `fileio.py`, `locker.py`, `unlocker.py`.
+  `discovery.py`, `models.py`, `fileio.py`, `locker.py`, `unlocker.py`, `shell_setup.py`.
 - Installation/removal: executable `install.sh`, `uninstall.sh`.
 - Verification: `tests/conftest.py`, `test_cli.py`, `test_discovery.py`,
   `test_fileio.py`, `test_installation.py`, `test_locker.py`, `test_terminal.py`,
-  `test_unlocker.py`, plus `tests/fixtures/__init__.py`, `factory.py`, `README.md`.
+  `test_unlocker.py`, `test_shell_setup.py`, plus `tests/fixtures/__init__.py`, `factory.py`, `README.md`.
 - Documentation: `README.md`, `REQUIREMENTS.md`.
 - Continuous verification: `.github/workflows/tests.yml` (added after the repository was supplied).
 - Built deliverables: `dist/pyunlock-0.1.0-py3-none-any.whl` and

@@ -1,6 +1,11 @@
 #!/bin/bash
 # Installs into the current user's home; never run with sudo.
+_pyunlock_install() {
+if (
 set -euo pipefail
+# A sourced Zsh configuration may set ZDOTDIR without exporting it. Pass that
+# setting to the helper only inside this subshell, preserving the caller state.
+if [ "${ZDOTDIR+x}" = x ]; then export ZDOTDIR; fi
 
 PYUNLOCK_PYTHON="${PYUNLOCK_PYTHON:-python3}"
 command -v "$PYUNLOCK_PYTHON" >/dev/null 2>&1 || {
@@ -163,6 +168,8 @@ def install():
                     "The installed command failed verification; the previous command was preserved.")
         checked_run([python, "-m", "pyunlock", "--version"],
                     "The installed Python module failed verification; the previous command was preserved.")
+        checked_run([python, "-m", "pyunlock.shell_setup"],
+                    "Automatic PATH setup failed; the previous command was preserved.")
 
         # Revalidate after preparing the environment, before changing the public command.
         check_layout(home)
@@ -179,9 +186,7 @@ def install():
         else:
             os.replace(temporary, command)
         print(f"Installed: {command}")
-        if str(bin_dir) not in os.environ.get("PATH", "").split(os.pathsep):
-            print('Add this line to ~/.zshrc or ~/.bashrc, then open a new terminal:')
-            print('export PATH="$HOME/.local/bin:$PATH"')
+        print("PATH is configured automatically for future Bash/Zsh terminals.")
     finally:
         if stage is not None:
             shutil.rmtree(stage, ignore_errors=True)
@@ -212,3 +217,18 @@ except (InstallError, OSError, ValueError) as error:
     print(f"pyunlock installer: {error}", file=sys.stderr)
     sys.exit(1)
 PY
+); then
+    case ":${PATH-}:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) export PATH="$HOME/.local/bin${PATH:+:$PATH}" ;;
+    esac
+    hash -r 2>/dev/null || true
+    unset -f _pyunlock_install
+    return 0
+else
+    local pyunlock_status=$?
+    unset -f _pyunlock_install
+    return "$pyunlock_status"
+fi
+}
+_pyunlock_install

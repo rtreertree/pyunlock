@@ -70,6 +70,9 @@ elif args == ['-m', 'pip', '--version']:
     print('pip test double')
 elif args == ['-m', 'pyunlock', '--version']:
     print('pyunlock 0.1.0')
+elif args == ['-m', 'pyunlock.shell_setup']:
+    import runpy
+    runpy.run_module('pyunlock.shell_setup', run_name='__main__')
 else:
     raise SystemExit('Unexpected test invocation: ' + repr(args))
 """
@@ -83,7 +86,8 @@ else:
     for key in list(environment):
         if key.startswith("PYUNLOCK_"):
             del environment[key]
-    environment.update(HOME=str(home), PYUNLOCK_SOURCE=str(source), PYUNLOCK_PYTHON=str(python))
+    environment.update(HOME=str(home), PYUNLOCK_SOURCE=str(source), PYUNLOCK_PYTHON=str(python), SHELL="/bin/bash")
+    environment.pop("ZDOTDIR", None)
     return home, environment
 
 
@@ -297,6 +301,84 @@ def test_default_github_source_installs_without_source_overrides(isolated, tmp_p
     assert run_script(UNINSTALL, environment).returncode == 0
 
 
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+@pytest.mark.parametrize("method", ["source", "eval"])
+def test_sourced_install_activates_current_shell_and_preserves_shell_state(isolated, shell, method):
+    executable = shutil.which(shell)
+    if executable is None:
+        pytest.skip(f"{shell} is unavailable")
+    home, environment = isolated
+    environment.update(SHELL=executable, PATH="/usr/bin:/bin")
+    script = '''
+set -eu
+trap ':' USR1
+before_options=$-
+before_traps=$(trap)
+before_directory=$PWD
+if [ "$2" = eval ]; then eval "$(cat "$1")"; else . "$1"; fi
+test "$-" = "$before_options"
+test "$(trap)" = "$before_traps"
+test "$PWD" = "$before_directory"
+test "$(command -v pyunlock)" = "$HOME/.local/bin/pyunlock"
+pyunlock --version
+if command -v _pyunlock_install >/dev/null 2>&1; then exit 9; fi
+if [ "$2" = eval ]; then eval "$(cat "$1")"; else . "$1"; fi
+test "$(command -v pyunlock)" = "$HOME/.local/bin/pyunlock"
+pyunlock --version
+'''
+    result = subprocess.run([executable, "-c", script, "pyunlock-test", str(INSTALL), method],
+                            env=environment, text=True, capture_output=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "pyunlock 0.1.0" in result.stdout
+    startup = home / (".bashrc" if shell == "bash" else ".zshrc")
+    assert startup.read_bytes().count(b"# >>> pyunlock PATH >>>") == 1
+    # A new interactive terminal must also find the command without activation.
+    fresh = subprocess.run([executable, "-ic", 'test "$(command -v pyunlock)" = "$HOME/.local/bin/pyunlock" && pyunlock --version'],
+                           env=environment, text=True, capture_output=True, timeout=30)
+    assert fresh.returncode == 0, fresh.stdout + fresh.stderr
+
+
+def test_path_setup_failure_preserves_working_upgrade_and_original_shell_files(isolated):
+    home, environment = isolated
+    assert run_script(INSTALL, environment).returncode == 0
+    root, command = paths(home)
+    previous = command.readlink()
+    bashrc = home / ".bashrc"
+    original = bashrc.read_bytes()
+    bashrc.chmod(0o400)
+    try:
+        failed = run_script(INSTALL, environment)
+        assert failed.returncode == 1
+        assert "PATH setup failed" in failed.stderr
+        assert "Traceback" not in failed.stderr
+        assert command.readlink() == previous
+        assert list((root / "envs").iterdir()) == [previous.parent.parent]
+        assert bashrc.read_bytes() == original
+    finally:
+        bashrc.chmod(0o600)
+
+
+def test_sourced_zsh_install_honors_unexported_zdotdir(isolated, tmp_path):
+    if not Path("/bin/zsh").is_file():
+        pytest.skip("Zsh is unavailable")
+    home, environment = isolated
+    directory = tmp_path / "Zsh settings ü"
+    directory.mkdir()
+    environment["SHELL"] = "/bin/zsh"
+    script = '''
+ZDOTDIR=$2
+typeset +x ZDOTDIR
+. "$1" || exit $?
+test "$(command -v pyunlock)" = "$HOME/.local/bin/pyunlock" || exit 8
+test -f "$ZDOTDIR/.zshrc" && test -f "$ZDOTDIR/.zprofile" || exit 9
+if env | grep '^ZDOTDIR='; then exit 10; fi
+'''
+    result = subprocess.run(["/bin/zsh", "-c", script, "pyunlock-test", str(INSTALL), str(directory)],
+                            env=environment, text=True, capture_output=True, timeout=120)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (home / ".zshrc").exists()
+
+
 def test_missing_git_and_old_python_fail_before_writing(isolated, tmp_path):
     home, environment = isolated
     environment.pop("PYUNLOCK_SOURCE")
@@ -369,14 +451,18 @@ def test_real_packaged_install_and_failed_update(tmp_path):
     home = tmp_path / "real home with spaces ü"
     home.mkdir()
     environment = os.environ.copy()
+    environment.pop("ZDOTDIR", None)
     environment.update(HOME=str(home), PYUNLOCK_PYTHON=sys.executable,
                        PYUNLOCK_SOURCE=str(Path(wheel).resolve()), PIP_NO_INDEX="1",
-                       PIP_FIND_LINKS=str(Path(wheelhouse).resolve()), PIP_DISABLE_PIP_VERSION_CHECK="1")
+                       PIP_FIND_LINKS=str(Path(wheelhouse).resolve()), PIP_DISABLE_PIP_VERSION_CHECK="1", SHELL="/bin/bash")
     result = run_script(INSTALL, environment)
     assert result.returncode == 0, result.stdout + result.stderr
     root, command = paths(home)
     first_environment = command.readlink()
-    updated = run_script(INSTALL, environment)
+    updated = subprocess.run(["/bin/bash", "-c",
+                              '. "$1" && test "$(command -v pyunlock)" = "$HOME/.local/bin/pyunlock" && pyunlock --version',
+                              "pyunlock-test", str(INSTALL)], env=environment, text=True,
+                             capture_output=True, timeout=120)
     assert updated.returncode == 0, updated.stdout + updated.stderr
     previous = command.readlink()
     assert previous != first_environment and first_environment.is_file()
@@ -433,10 +519,11 @@ def test_documented_manual_install_survives_source_removal(tmp_path):
         ".git", ".venv", "dist", "build", "*.egg-info", "__pycache__", ".pytest_cache"))
     environment = os.environ.copy()
     environment.pop("PYTHONPATH", None)
+    environment.pop("ZDOTDIR", None)
     environment.update(HOME=str(home), PATH=str(Path(sys.executable).parent) + os.pathsep + environment.get("PATH", ""),
                        PIP_NO_INDEX="1", PIP_FIND_LINKS=str(Path(wheelhouse).resolve()),
-                       PIP_DISABLE_PIP_VERSION_CHECK="1", PYUNLOCK_PYTHON=sys.executable)
-    installed = subprocess.run(["/bin/bash", "-c", manual_install_block()], cwd=checkout,
+                       PIP_DISABLE_PIP_VERSION_CHECK="1", PYUNLOCK_PYTHON=sys.executable, SHELL="/bin/bash")
+    installed = subprocess.run(["/bin/bash", "-c", manual_install_block() + '\ntest "$(command -v pyunlock)" = "$HOME/.local/bin/pyunlock" && pyunlock --version'], cwd=checkout,
                                env=environment, text=True, capture_output=True, timeout=120)
     assert installed.returncode == 0, installed.stdout + installed.stderr
     root, command = paths(home)

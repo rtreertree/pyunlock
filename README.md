@@ -104,7 +104,8 @@ Inspect the scripts in a checkout, then install it into the managed layout:
 git clone https://github.com/rtreertree/pyunlock.git
 cd pyunlock
 less install.sh
-PYUNLOCK_SOURCE="$PWD" /bin/bash install.sh
+PYUNLOCK_SOURCE="$PWD" source ./install.sh
+pyunlock --version
 ```
 
 `PYUNLOCK_SOURCE` must be an absolute path to a checkout or wheel. Omit it to
@@ -115,16 +116,19 @@ Python executable, for example `PYUNLOCK_PYTHON=python3.12`. These variables sel
 the package/interpreter; installation paths remain fixed under the current
 user's home directory.
 
-The short remote install command is:
+Run this in Bash or Zsh to install and immediately use `pyunlock` in the same
+terminal. Download failure stops installation:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rtreertree/pyunlock/main/install.sh)"
+pyunlock_installer="$(curl -fsSL https://raw.githubusercontent.com/rtreertree/pyunlock/main/install.sh)" && eval "$pyunlock_installer"
+pyunlock --version
 ```
 
-For scripts, explicitly stop when the download fails:
+Running the installer as a separate process also configures PATH automatically
+for future terminals:
 
 ```bash
-installer="$(curl -fsSL https://raw.githubusercontent.com/rtreertree/pyunlock/main/install.sh)" && /bin/bash -c "$installer"
+/bin/bash install.sh
 ```
 
 For a published release, use the same tested tag or commit in the raw script URL
@@ -145,18 +149,25 @@ Here `~` means your home directory: for example `/Users/alice` on macOS or
 `/home/alice` on Linux. Keep documents outside the dedicated application root;
 uninstalling removes everything in that marked directory.
 
-Make the command available in the current terminal:
+PATH setup is automatic. The installer uses `SHELL` to select Bash or Zsh
+(Bash when unset), announces the startup files it updates, and adds one marked
+conditional block for `~/.local/bin`. Repeated installations add no duplicate
+blocks or PATH entries. Existing settings and file permissions are preserved.
 
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-pyunlock --version
-pyunlock --help
-```
+For Bash, setup updates `~/.bashrc` and the first existing login file among
+`~/.bash_profile`, `~/.bash_login` and `~/.profile`; if none exists, it creates
+`~/.profile`. This avoids creating a higher-priority profile that would hide
+existing settings. For Zsh, setup updates `.zshrc` and `.zprofile` under
+`${ZDOTDIR:-$HOME}`. A configured `ZDOTDIR` must be an existing absolute directory.
+Unsupported shells and unsafe, linked or unwritable startup files produce a
+clear failure before the command is switched. Edited/incomplete managed blocks
+must be inspected before retrying.
 
-For future terminals, add that `export` line once to `~/.zshrc` for Zsh or
-`~/.bashrc` for interactive Bash. Login Bash may need it in `~/.bash_profile`, or
-that file may source `~/.bashrc`. The installer only prints this advice; it does
-not edit shell startup files.
+Use the sourced/evaluated install commands above for immediate availability in
+the invoking terminal. A standalone `/bin/bash install.sh` cannot change its
+parent terminal's environment; after that form, open a new terminal. No manual
+PATH export or shell configuration is needed. Sourcing preserves your shell's
+options, traps and working directory.
 
 ### Updating and rollback
 
@@ -227,13 +238,21 @@ subprocess.run([python, "-m", "pip", "install", "."], check=True)
 subprocess.run([python, "-m", "pip", "check"], check=True)
 subprocess.run([str(environment / "bin/pyunlock"), "--version"], check=True)
 subprocess.run([python, "-m", "pyunlock", "--version"], check=True)
+subprocess.run([python, "-m", "pyunlock.shell_setup"], check=True)
 command.symlink_to(environment / "bin/pyunlock")  # fails if a command appeared
 print(f"Installed: {command}")
 PY
-)
+) && {
+    case ":${PATH-}:" in
+        *":$HOME/.local/bin:"*) ;;
+        *) export PATH="$HOME/.local/bin${PATH:+:$PATH}" ;;
+    esac
+    hash -r 2>/dev/null || true
+}
 ```
 
-Set up PATH as above. This is a non-editable installation; the source checkout
+The block configures PATH and activates it in the current terminal automatically.
+This is a non-editable installation; the source checkout
 can be moved or removed afterward. The installed environment must stay in place.
 
 ## Uninstalling
@@ -257,7 +276,8 @@ managed command symlink and entire marked root, including retained or incomplete
 environments. It handles dangling managed links and repeat removal. It refuses
 unrelated commands, unmarked roots and symlinked installation directories.
 It leaves your PDFs outside the root, source checkout, shared pip cache,
-`~/.local/bin`, and startup files intact. Keep the PATH entry if other apps use it.
+`~/.local/bin`, and the automatic PATH blocks in startup files intact. The guarded
+PATH entry is shared with other apps using `~/.local/bin` and is safe to retain.
 
 Check `command -v pyunlock` afterward. Another installation elsewhere on PATH is
 outside this script's scope; a new terminal also clears stale shell command

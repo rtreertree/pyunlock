@@ -2,6 +2,27 @@
 
 Status: design specification. The Python application has not been implemented. The install/uninstall scripts and manual commands below are templates for the future repository.
 
+### Installation amendment — automatic PATH setup
+
+The user's subsequent installation request supersedes the original instructions
+below that require manual PATH exports or prohibit startup-file edits. Installation
+now configures Bash/Zsh startup files automatically and announces each edit. A
+single marked conditional block adds `~/.local/bin` without duplicate PATH entries.
+Bash uses `.bashrc` and its first existing login profile (default `.profile`);
+Zsh uses `.zshrc` and `.zprofile` under `${ZDOTDIR:-$HOME}`. Existing bytes and
+permissions are retained; unsafe links, edited blocks and unwritable files fail
+safely before switching the public command.
+
+The actual `install.sh` is sourceable from Bash and Zsh to activate the command
+immediately in the invoking terminal without changing shell options or traps.
+The recommended downloaded form evaluates the installer in the invoking shell
+only after a successful download. Executing the script as a child process sets
+up future terminals; a child cannot modify its parent's environment. No manual
+PATH configuration is required. Manual installation calls the same packaged
+shell-setup helper. Uninstallation retains the guarded shared PATH entry.
+The original embedded script templates below predate this amendment; use the
+implemented scripts and README for current installation commands.
+
 ## 1. Purpose
 
 `pyunlock` is a Python command-line application that unlocks PDFs using an existing password or locks PDFs with a new password. It processes one or more files, folders, or a mixture of both in a single command. Processing happens locally; PDFs and passwords are never uploaded.
