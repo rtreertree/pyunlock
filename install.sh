@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 MARKER = "pyunlock-install-v1"
-REPOSITORY = os.environ.get("PYUNLOCK_REPO", "YOUR_GITHUB_USERNAME/pyunlock")
+REPOSITORY = os.environ.get("PYUNLOCK_REPO", "rtreertree/pyunlock")
 REFERENCE = os.environ.get("PYUNLOCK_REF", "main")
 
 

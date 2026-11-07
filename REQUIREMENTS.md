@@ -3,6 +3,8 @@
 `DESIGN.md` is the source of truth and was read in full before implementation.
 No applicable `AGENTS.md` was present. The initial workspace contained only the
 design, with no Git metadata or configured remote. The design is unchanged.
+The user subsequently pushed the project to `rtreertree/pyunlock`; `origin` now
+identifies that repository and its default branch is `main`.
 
 | Design requirement | Implementation | Verification |
 | --- | --- | --- |
@@ -36,21 +38,21 @@ design, with no Git metadata or configured remote. The design is unchanged.
 | Prerequisites, invalid repo/ref, transport failure, unrelated command/ownership safety | installation scripts | Pass: missing Python/Git/venv/pip, bad repo/ref, locally redirected real Git failures, unrelated file/link/dangling command, symlink parents/root/envs, unsafe markers. Curl is a prerequisite of the documented download commands. |
 | Manual installation same layout, repeat refusal, checkout independence | exact README manual block | Pass: real venv/pip in isolated HOME, copied checkout deleted, installed console/module still work. |
 | Uninstall normal/retained/incomplete/dangling/repeated; validate both targets before deleting; preserve external files | `uninstall.sh` | Pass: installer suite, multiple real envs, incomplete roots, dangling link, repeat removal, unrelated commands/unmarked or symlinked roots refused. |
-| Discover real GitHub remote or preserve explicit placeholder | installer + README | No remote existed. `YOUR_GITHUB_USERNAME/pyunlock` remains; replace installer default and README URLs with actual owner/repository before publication. Local installation works. |
+| Discover real GitHub remote or preserve explicit placeholder | installer + README + project URLs | Pass: configured origin is rtreertree/pyunlock. Installer defaults, README download/clone URLs and package metadata use the actual repository. Default Git installation tested against GitHub main in an isolated HOME. Design reference templates and the explicit-placeholder rejection test remain unchanged. |
 | README prerequisites/examples/exact paths/automated/manual install/update/uninstall and limitations | `README.md` | Reviewed against implementation; exact manual block tested. Original DESIGN.md preserved. |
 | Shell syntax, sdist/wheel build, noneditable installed application | build and entire test suite | Pass on macOS: isolated build creates sdist, then wheel from sdist; fresh install, pip check, installed package tested without src path overrides. |
-| macOS and Linux validation before publication | platform checks | macOS arm64 verified. Linux/WSL unverified: local Docker daemon unavailable. Python 3.11 also unavailable. No publication or push performed. |
+| macOS and Linux validation before publication | platform checks + `.github/workflows/tests.yml` | macOS arm64 verified. Linux/WSL and Python 3.11 remain unverified locally. New workflow covers macOS/Ubuntu and Python 3.11/3.12/3.13, including real installer tests; check hosted results for the pushed commit before claiming additional platform coverage. |
 
 ## Recorded verification
 
 Verified on 2026-11-07 (Asia/Bangkok), macOS arm64, Python 3.12.3,
 pypdf 7.0.0, cryptography 50.0.2 and pytest 9.2.0. The full suite passes
-**219 tests with no skips**, including real installer integration and four
+**220 tests with no skips**, including real installer integration and four
 installed-command pseudo-terminal cases. Bash syntax and `pip check` pass.
 
 Build/test environments and downloaded wheels were confined to `/private/tmp`;
 PDFs and fake homes were generated in temporary directories. The fresh packaged
-test interpreter was `/private/tmp/pyunlock-package-env/bin/python`, importing
+test interpreter was `/private/tmp/pyunlock-followup-env/bin/python`, importing
 pyunlock from its `site-packages`, without editable installation or `PYTHONPATH`.
 Real installer tests used the built wheel and an offline dependency wheelhouse.
 Git failure tests redirected requests to local generated repositories; no
@@ -61,23 +63,44 @@ The full run used:
 ```bash
 PYUNLOCK_TEST_WHEEL="$PWD/dist/pyunlock-0.1.0-py3-none-any.whl" \
 PYUNLOCK_TEST_WHEELHOUSE=/private/tmp/pyunlock-wheelhouse \
-/private/tmp/pyunlock-package-env/bin/python -m pytest -q
+/private/tmp/pyunlock-followup-env/bin/python -m pytest -q
 ```
 
 Linux/WSL and Python 3.11 execution remain external checks before publication.
-The repository placeholder must be replaced once an actual remote is known.
+The new six-job GitHub Actions workflow has been checked for valid YAML and
+embedded shell syntax. Hosted results for each pushed commit must be checked
+in GitHub Actions before claiming coverage beyond the local macOS run.
 Representative synthetic fixture success does not establish preservation of
 every possible PDF feature. Digital signatures, extended attributes, ACLs,
 original timestamps, secure erasure, concurrent-editor locking and forced-kill
 cleanup retain the design's stated limits. Filesystems without atomic hard-link
 publication fail safely in new mode.
 
-No personal documents were used, no installation was made into the real home,
-and no release, push, shell startup edit or administrator operation occurred.
+No personal documents were used and no installation was made into the real
+home. No release was published, shell startup files edited or administrator
+operations performed.
+
+## GitHub continuation
+
+After the user supplied the repository, its public visibility and `main` default
+branch were confirmed through the connected GitHub tools and matched the local
+`origin`. A separate smoke test ran the corrected local installer with no
+repository or local-source override, installing directly from GitHub commit
+`74c969fc557c71b005911cbfad3e01ceb8441cdb` in a temporary HOME with spaces and
+Unicode. Python dependencies came from the temporary offline wheelhouse.
+The installed console/module worked, a generated rich PDF survived a lock/unlock
+round trip, empty/wrong passwords were rejected, and uninstall/repeat removal
+passed. The temporary installation was removed afterward. This verifies the
+GitHub package source; publishing this change updates the raw installer's
+default repository for new users.
+
+Continuation changes: `install.sh`, `README.md`, `REQUIREMENTS.md`,
+`pyproject.toml`, `MANIFEST.in`, `tests/test_installation.py`, and the new
+`.github/workflows/tests.yml`. No application PDF behavior changed.
 
 ## Changed files
 
-All files below were added; `DESIGN.md` was left unchanged.
+The original implementation added the files below; `DESIGN.md` was left unchanged.
 
 - Packaging: `pyproject.toml`, `MANIFEST.in`, `.gitignore`.
 - Application: `src/pyunlock/__init__.py`, `__main__.py`, `cli.py`,
@@ -87,5 +110,6 @@ All files below were added; `DESIGN.md` was left unchanged.
   `test_fileio.py`, `test_installation.py`, `test_locker.py`, `test_terminal.py`,
   `test_unlocker.py`, plus `tests/fixtures/__init__.py`, `factory.py`, `README.md`.
 - Documentation: `README.md`, `REQUIREMENTS.md`.
+- Continuous verification: `.github/workflows/tests.yml` (added after the repository was supplied).
 - Built deliverables: `dist/pyunlock-0.1.0-py3-none-any.whl` and
   `dist/pyunlock-0.1.0.tar.gz` (build outputs are ignored by Git).

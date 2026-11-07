@@ -50,6 +50,8 @@ elif args[:2] == ['-m', 'venv']:
     (environment / 'bin/python').write_text(launcher.read_text())
     (environment / 'bin/python').chmod(0o700)
 elif args[:3] == ['-m', 'pip', 'install']:
+    if os.environ.get('PYUNLOCK_TEST_PACKAGE_LOG'):
+        pathlib.Path(os.environ['PYUNLOCK_TEST_PACKAGE_LOG']).write_text(args[3])
     if os.environ.get('PYUNLOCK_TEST_INTERRUPT'):
         import signal, time
         os.kill(os.getppid(), signal.SIGINT)
@@ -272,12 +274,27 @@ def test_disguised_managed_command_is_refused(isolated, tmp_path, bad_target):
 def test_repository_placeholder_and_bad_ref_fail_before_creating_root(isolated):
     home, environment = isolated
     environment.pop("PYUNLOCK_SOURCE")
+    environment["PYUNLOCK_REPO"] = "YOUR_GITHUB_USERNAME/pyunlock"
     result = run_script(INSTALL, environment)
     assert result.returncode == 1 and "placeholder" in result.stderr
     assert not paths(home)[0].exists()
     environment.update(PYUNLOCK_REPO="example/pyunlock", PYUNLOCK_REF="bad ref")
     assert run_script(INSTALL, environment).returncode == 1
     assert not paths(home)[0].exists()
+
+
+def test_default_github_source_installs_without_source_overrides(isolated, tmp_path):
+    home, environment = isolated
+    environment.pop("PYUNLOCK_SOURCE")
+    recorded_package = tmp_path / "pip-package.txt"
+    environment["PYUNLOCK_TEST_PACKAGE_LOG"] = str(recorded_package)
+
+    installed = run_script(INSTALL, environment)
+
+    assert installed.returncode == 0, installed.stderr
+    assert recorded_package.read_text() == "git+https://github.com/rtreertree/pyunlock.git@main"
+    assert paths(home)[1].is_symlink()
+    assert run_script(UNINSTALL, environment).returncode == 0
 
 
 def test_missing_git_and_old_python_fail_before_writing(isolated, tmp_path):

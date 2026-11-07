@@ -95,36 +95,36 @@ The installer reports missing requirements. No administrator access or virtual
 environment activation is needed. Do not run installation or removal with
 `sudo`.
 
-**Repository setup is still required:** this workspace had no Git remote. Replace
-every `YOUR_GITHUB_USERNAME/pyunlock` in this README and the default repository in
-`install.sh` with the actual GitHub owner/repository before publishing. These
-download URLs are placeholders, not working installation endpoints. A local
-checkout or wheel can already be installed using the local command below.
+Source: [rtreertree/pyunlock](https://github.com/rtreertree/pyunlock).
+The installer defaults to this repository's `main` branch.
 
 Inspect the scripts in a checkout, then install it into the managed layout:
 
 ```bash
+git clone https://github.com/rtreertree/pyunlock.git
+cd pyunlock
 less install.sh
 PYUNLOCK_SOURCE="$PWD" /bin/bash install.sh
 ```
 
 `PYUNLOCK_SOURCE` must be an absolute path to a checkout or wheel. Omit it to
-install from GitHub using `PYUNLOCK_REPO=owner/repository` and optionally
-`PYUNLOCK_REF=tag-or-commit` (default `main`). Set `PYUNLOCK_PYTHON` to select a
+install from `rtreertree/pyunlock` on GitHub. Override the source with
+`PYUNLOCK_REPO=owner/repository` and optionally `PYUNLOCK_REF=tag-or-commit`
+(default `main`). Set `PYUNLOCK_PYTHON` to select a
 Python executable, for example `PYUNLOCK_PYTHON=python3.12`. These variables select
 the package/interpreter; installation paths remain fixed under the current
 user's home directory.
 
-After replacing the repository placeholder, the short remote install command is:
+The short remote install command is:
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/pyunlock/main/install.sh)"
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/rtreertree/pyunlock/main/install.sh)"
 ```
 
 For scripts, explicitly stop when the download fails:
 
 ```bash
-installer="$(curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/pyunlock/main/install.sh)" && /bin/bash -c "$installer"
+installer="$(curl -fsSL https://raw.githubusercontent.com/rtreertree/pyunlock/main/install.sh)" && /bin/bash -c "$installer"
 ```
 
 For a published release, use the same tested tag or commit in the raw script URL
@@ -244,10 +244,10 @@ From a retained checkout:
 /bin/bash uninstall.sh
 ```
 
-Or, after replacing the repository placeholder:
+Or download the uninstaller, stopping if the download fails:
 
 ```bash
-uninstaller="$(curl -fsSL https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/pyunlock/main/uninstall.sh)" && /bin/bash -c "$uninstaller"
+uninstaller="$(curl -fsSL https://raw.githubusercontent.com/rtreertree/pyunlock/main/uninstall.sh)" && /bin/bash -c "$uninstaller"
 ```
 
 Python 3 must be available (select it with `PYUNLOCK_PYTHON` if necessary). No
@@ -319,8 +319,15 @@ download dependencies to a wheelhouse and set `PYUNLOCK_TEST_WHEEL` to the absol
 wheel path and `PYUNLOCK_TEST_WHEELHOUSE` to that wheelhouse directory. These tests
 otherwise skip explicitly. `PYUNLOCK_TEST_PYTHON` optionally selects the installed
 interpreter for subprocess tests. See [REQUIREMENTS.md](REQUIREMENTS.md) for the
-requirement-to-test reconciliation and measured platform coverage. Linux/WSL
-must be checked on a real Linux host before publication if unavailable locally.
+requirement-to-test reconciliation and measured platform coverage.
+
+The GitHub Actions workflow in `.github/workflows/tests.yml` runs on pushes,
+pull requests and manual dispatch. It builds the source archive and wheel,
+installs the wheel in a fresh environment, and runs the full suite (including
+real installer tests) on macOS and Ubuntu with Python 3.11, 3.12 and 3.13.
+Check the [workflow results](https://github.com/rtreertree/pyunlock/actions)
+before publishing. A configured workflow is not evidence of a passing run;
+Linux/WSL and Python versions unavailable locally remain unverified until tested.
 
 The dependency choices and PDF operations follow the upstream
 [pypdf installation guide](https://pypdf.readthedocs.io/en/stable/user/installation.html),

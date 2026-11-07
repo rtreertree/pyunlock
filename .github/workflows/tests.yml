@@ -1,0 +1,54 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaged-tests:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        shell: bash
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_INPUT: "1"
+      GIT_TERMINAL_PROMPT: "0"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Check installer syntax
+        run: bash -n install.sh uninstall.sh
+      - name: Download build and test dependencies
+        run: |
+          python -m pip download --dest "$RUNNER_TEMP/pyunlock-wheelhouse" \
+            'pypdf[crypto]>=7.0.0,<8' 'setuptools>=77' \
+            'pytest>=8,<10' 'build>=1,<2'
+      - name: Build distributions and test the installed wheel
+        run: |
+          python -m venv "$RUNNER_TEMP/pyunlock-checks"
+          verify_python="$RUNNER_TEMP/pyunlock-checks/bin/python"
+          export PIP_NO_INDEX=1
+          export PIP_FIND_LINKS="$RUNNER_TEMP/pyunlock-wheelhouse"
+          "$verify_python" -m pip install 'build>=1,<2'
+          "$verify_python" -m build
+          "$verify_python" -m pip install 'dist/pyunlock-0.1.0-py3-none-any.whl[test]'
+          "$verify_python" -m pip check
+          export PYUNLOCK_TEST_WHEEL="$GITHUB_WORKSPACE/dist/pyunlock-0.1.0-py3-none-any.whl"
+          export PYUNLOCK_TEST_WHEELHOUSE="$RUNNER_TEMP/pyunlock-wheelhouse"
+          "$verify_python" -m pytest -q

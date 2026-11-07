@@ -1,3 +1,4 @@
 include DESIGN.md REQUIREMENTS.md install.sh uninstall.sh
+include .github/workflows/tests.yml
 recursive-include tests *.py *.md
 
