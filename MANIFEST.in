@@ -1,0 +1,3 @@
+include DESIGN.md REQUIREMENTS.md install.sh uninstall.sh
+recursive-include tests *.py *.md
+
